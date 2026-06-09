@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 
-// Helper type for our image state
 type ImageData = { file: File; preview: string; base64: string };
 
 export default function Home() {
@@ -14,7 +13,6 @@ export default function Home() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
 
-  // Load history from localStorage
   useEffect(() => {
     const savedHistory = localStorage.getItem('damage_reports_history');
     if (savedHistory) {
@@ -22,17 +20,13 @@ export default function Home() {
     }
   }, []);
 
-  // MULTIPLE IMAGE HANDLER
   const handleAddImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-
     files.forEach(file => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const previewUrl = event.target?.result as string;
-        // Strip the data URL prefix to get the raw base64 string for the API
         const base64Data = previewUrl.split(',')[1];
-
         setImages(prev => [...prev, { file, preview: previewUrl, base64: base64Data }]);
       };
       reader.readAsDataURL(file);
@@ -48,13 +42,11 @@ export default function Home() {
       setError('Please upload at least one image.');
       return;
     }
-
     setLoading(true);
     setError('');
     setResult(null);
 
     try {
-      // Package all images for the API
       const payloadImages = images.map(img => ({
         mimeType: img.file.type,
         data: img.base64
@@ -63,14 +55,10 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description,
-          images: payloadImages // Sending the array!
-        })
+        body: JSON.stringify({ description, images: payloadImages })
       });
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || 'Failed to check damage');
 
       setResult(data);
@@ -87,7 +75,6 @@ export default function Home() {
     }
   };
 
-  // TRUE DIRECT PDF DOWNLOAD
   const handleDirectDownload = async () => {
     if (!result) return;
     setIsDownloading(true);
@@ -97,26 +84,48 @@ export default function Home() {
       doc.setFontSize(22);
       doc.setTextColor(30, 58, 138);
       doc.text('AI Damage Assessment Report', 20, 20);
+
       doc.setDrawColor(200, 200, 200);
       doc.line(20, 25, 190, 25);
+
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
       doc.text('Damage Type:', 20, 40);
       doc.setFont('helvetica', 'normal');
       doc.text(result.damageType || 'N/A', 60, 40);
+
       doc.setFont('helvetica', 'bold');
       doc.text('Severity:', 20, 50);
       doc.setFont('helvetica', 'normal');
       doc.text(result.severity || 'N/A', 60, 50);
+
       doc.setFont('helvetica', 'bold');
-      doc.text('Estimated Cost:', 20, 60);
+      doc.text('Total Est. Cost:', 20, 60);
       doc.setFont('helvetica', 'normal');
       doc.text((result.estimatedCostINR || '').replace(/₹/g, 'INR '), 60, 60);
+
+      // --- NEW: Dynamic Y-Axis Tracking for PDF Layout ---
+      let currentY = 75;
+
+      if (result.costBreakdown && result.costBreakdown.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Cost Breakdown:', 20, currentY);
+        currentY += 8;
+
+        doc.setFont('helvetica', 'normal');
+        result.costBreakdown.forEach((item: any) => {
+          doc.text(`• ${item.item}: ${item.cost.replace(/₹/g, 'INR ')}`, 25, currentY);
+          currentY += 7;
+        });
+        currentY += 5; // Add extra padding after the list
+      }
+
       doc.setFont('helvetica', 'bold');
-      doc.text('Executive Summary:', 20, 80);
+      doc.text('Executive Summary:', 20, currentY);
       doc.setFont('helvetica', 'normal');
-      doc.text(doc.splitTextToSize(result.summary || '', 170), 20, 90);
+      doc.text(doc.splitTextToSize(result.summary || '', 170), 20, currentY + 10);
+
       doc.save('AI_Damage_Report.pdf');
     } catch (err: any) {
       alert('PDF Error: ' + (err.message || 'Check console.'));
@@ -141,39 +150,22 @@ export default function Home() {
       <main className="flex-grow container mx-auto px-4 py-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
-          {/* Upload Section */}
           <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
               1. Upload Evidence
             </h2>
-
             <label className="block text-sm font-medium text-gray-600 mb-2">Accident Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none transition-all"
-              placeholder="Describe the damage..."
-            />
-
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none transition-all" placeholder="Describe the damage..." />
             <label className="block text-sm font-medium text-gray-600 mb-3">Upload Photos</label>
 
-            {/* MULTIPLE IMAGE UI GRID */}
             <div className="flex flex-wrap gap-4 mb-6">
               {images.map((img, index) => (
                 <div key={index} className="relative w-24 h-24 group animate-in zoom-in duration-200">
                   <img src={img.preview} alt="upload" className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm" />
-                  <button
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-600 transition-colors"
-                  >
-                    ✕
-                  </button>
+                  <button onClick={() => removeImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-600 transition-colors">✕</button>
                 </div>
               ))}
-
-              {/* The Styled '+' Button */}
               <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 text-blue-600 cursor-pointer hover:bg-blue-100 hover:border-blue-400 transition-all">
                 <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                 <span className="text-xs font-medium">Add Photo</span>
@@ -181,17 +173,12 @@ export default function Home() {
               </label>
             </div>
 
-            <button
-              onClick={handleCheckDamage}
-              disabled={loading || images.length === 0}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-sm"
-            >
+            <button onClick={handleCheckDamage} disabled={loading || images.length === 0} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-sm">
               {loading ? 'Analyzing...' : 'Get Damage Report'}
             </button>
             {error && <p className="text-red-500 mt-4 text-sm font-medium bg-red-50 p-3 rounded-lg border border-red-100">{error}</p>}
           </div>
 
-          {/* Assessment Report */}
           <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex flex-col">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -201,26 +188,44 @@ export default function Home() {
             {loading && <div className="flex-grow text-blue-500 bg-blue-50/50 flex items-center justify-center rounded-xl animate-pulse font-medium">Inspecting damage details...</div>}
 
             {result && (
-              <div className="flex flex-col flex-grow space-y-5 animate-in fade-in duration-500">
-                <div className="p-5 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="flex flex-col flex-grow space-y-4 animate-in fade-in duration-500">
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <p className="text-xs text-gray-500 uppercase font-bold mb-1">Damage Type</p>
-                  <p className="text-xl font-semibold text-gray-800">{result.damageType}</p>
+                  <p className="text-lg font-semibold text-gray-800">{result.damageType}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-center">
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-center">
                     <p className="text-xs text-gray-500 uppercase font-bold mb-2">Severity</p>
                     <div><span className={`px-3 py-1 text-sm font-bold rounded-full border ${getSeverityStyles(result.severity)}`}>{result.severity}</span></div>
                   </div>
-                  <div className="p-5 bg-blue-50 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-center">
-                    <p className="text-xs text-blue-500 uppercase font-bold mb-1">Est. Cost</p>
-                    <p className="text-2xl font-bold text-blue-700">{result.estimatedCostINR}</p>
+                  <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-center">
+                    <p className="text-xs text-blue-500 uppercase font-bold mb-1">Total Est. Cost</p>
+                    <p className="text-xl font-bold text-blue-700">{result.estimatedCostINR}</p>
                   </div>
                 </div>
-                <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex-grow">
-                  <p className="text-xs text-gray-500 uppercase font-bold mb-3">Executive Summary</p>
+
+                {/* --- NEW: UI Cost Breakdown Rendering --- */}
+                {result.costBreakdown && result.costBreakdown.length > 0 && (
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-3">Cost Breakdown</p>
+                    <div className="space-y-2">
+                      {result.costBreakdown.map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between text-sm border-b border-gray-200 pb-2 last:border-0 last:pb-0">
+                          <span className="text-gray-700">{item.item}</span>
+                          <span className="font-semibold text-gray-900">{item.cost}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex-grow">
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-2">Executive Summary</p>
                   <p className="text-gray-700 text-sm leading-relaxed">{result.summary}</p>
                 </div>
-                <button onClick={handleDirectDownload} disabled={isDownloading} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-70 flex justify-center items-center gap-2">
+
+                <button onClick={handleDirectDownload} disabled={isDownloading} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 disabled:opacity-70 flex justify-center items-center gap-2 mt-2">
                   {isDownloading ? 'Generating PDF...' : 'Save as PDF'}
                 </button>
               </div>
@@ -228,7 +233,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Report History Section */}
         <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
           <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -244,7 +248,7 @@ export default function Home() {
                     <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Date & Time</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Damage Type</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Severity</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Cost (INR)</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Total Cost</th>
                     <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>

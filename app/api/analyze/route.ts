@@ -21,12 +21,16 @@ export async function POST(req: Request) {
       {
           "damageType": "Short 3-5 word description",
           "severity": "Low, Medium, High, or Critical",
-          "estimatedCostINR": "Realistic price range in ₹, e.g., ₹15,000 - ₹25,000",
+          "estimatedCostINR": "Realistic TOTAL price range in ₹",
+          "costBreakdown": [
+             { "item": "e.g., Parts/Material", "cost": "₹ amount" },
+             { "item": "e.g., Labor/Repair", "cost": "₹ amount" },
+             { "item": "e.g., Taxes/Misc", "cost": "₹ amount" }
+          ],
           "summary": "A 3-sentence professional summary of the overall damage and recommended action."
       }
       User Description: ${description}
     `;
-
         // 2. Map through the frontend images to create Gemini's inlineData parts
         // (Using inlineData and mimeType as the strict standard)
         const imageParts = images.map((img: any) => ({
