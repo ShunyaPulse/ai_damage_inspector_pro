@@ -1,63 +1,147 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
 
 export default function Home() {
+  const [description, setDescription] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState('');
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => setImagePreview(event.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCheckDamage = async () => {
+    if (!imageFile) {
+      setError('Please upload an image.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setResult(null);
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(imageFile);
+      reader.onload = async () => {
+        const base64String = (reader.result as string).split(',')[1];
+
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description,
+            base64Image: base64String,
+            mimeType: imageFile.type
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Failed to check damage');
+
+        setResult(data);
+        setLoading(false);
+      };
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans flex flex-col">
+      <nav className="bg-blue-900 text-white shadow-lg py-4 px-8 flex justify-between items-center">
+        <h1 className="text-xl font-bold tracking-wide">AI Damage Inspector Pro</h1>
+      </nav>
+
+      <main className="flex-grow container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">1. Upload Evidence</h2>
+
+          <label className="block text-sm font-medium text-gray-600 mb-2">Accident Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none"
+            placeholder="Describe the damage..."
+          />
+
+          <label className="block text-sm font-medium text-gray-600 mb-2">Upload Photo</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-6 cursor-pointer"
+          />
+
+          {imagePreview && (
+            <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-lg border mb-6 shadow-sm" />
+          )}
+
+          <button
+            onClick={handleCheckDamage}
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50"
+          >
+            {loading ? 'Creating Report...' : 'Get Damage Report'}
+          </button>
+
+          {error && <p className="text-red-500 mt-4 text-sm font-medium">{error}</p>}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200 flex flex-col">
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">2. Assessment Report</h2>
+
+          {!loading && !result && (
+            <div className="flex flex-col items-center justify-center flex-grow text-gray-400">
+              <p>Waiting for photo and description...</p>
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex flex-col items-center justify-center flex-grow text-blue-500">
+              <p className="animate-pulse font-semibold">Checking damage details...</p>
+            </div>
+          )}
+
+          {result && (
+            <div className="flex flex-col flex-grow space-y-4 animate-in fade-in duration-300">
+              <div className="p-4 bg-gray-50 rounded border">
+                <p className="text-sm text-gray-500 uppercase tracking-wider font-semibold">Damage Type</p>
+                <p className="text-lg font-medium text-gray-800">{result.damageType}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 rounded border">
+                  <p className="text-sm text-gray-500 uppercase tracking-wider font-semibold">Severity</p>
+                  <p className={`text-lg font-bold ${result.severity.includes('High') || result.severity.includes('Critical') ? 'text-red-600' : 'text-orange-500'}`}>
+                    {result.severity}
+                  </p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded border border-blue-100 shadow-inner">
+                  <p className="text-sm text-blue-500 uppercase tracking-wider font-semibold">Est. Cost (INR)</p>
+                  <p className="text-lg font-bold text-blue-700">{result.estimatedCostINR}</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded border flex-grow">
+                <p className="text-sm text-gray-500 uppercase tracking-wider font-semibold mb-2">Executive Summary</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{result.summary}</p>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
