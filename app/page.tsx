@@ -2,41 +2,50 @@
 
 import { useState, useEffect } from 'react';
 
+// Helper type for our image state
+type ImageData = { file: File; preview: string; base64: string };
+
 export default function Home() {
   const [description, setDescription] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState('');
+  const [images, setImages] = useState<ImageData[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
 
-  // Load history from localStorage on component mount
+  // Load history from localStorage
   useEffect(() => {
     const savedHistory = localStorage.getItem('damage_reports_history');
     if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error('Failed to parse history:', e);
-      }
+      try { setHistory(JSON.parse(savedHistory)); } catch (e) { console.error(e); }
     }
   }, []);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
+  // MULTIPLE IMAGE HANDLER
+  const handleAddImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+
+    files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (event) => setImagePreview(event.target?.result as string);
+      reader.onload = (event) => {
+        const previewUrl = event.target?.result as string;
+        // Strip the data URL prefix to get the raw base64 string for the API
+        const base64Data = previewUrl.split(',')[1];
+
+        setImages(prev => [...prev, { file, preview: previewUrl, base64: base64Data }]);
+      };
       reader.readAsDataURL(file);
-    }
+    });
+  };
+
+  const removeImage = (indexToRemove: number) => {
+    setImages(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
   const handleCheckDamage = async () => {
-    if (!imageFile) {
-      setError('Please upload an image.');
+    if (images.length === 0) {
+      setError('Please upload at least one image.');
       return;
     }
 
@@ -45,23 +54,18 @@ export default function Home() {
     setResult(null);
 
     try {
-      const base64String = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(imageFile);
-        reader.onload = () => {
-          const resultStr = reader.result as string;
-          resolve(resultStr.split(',')[1]);
-        };
-        reader.onerror = () => reject(new Error('Failed to read the image file.'));
-      });
+      // Package all images for the API
+      const payloadImages = images.map(img => ({
+        mimeType: img.file.type,
+        data: img.base64
+      }));
 
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description,
-          base64Image: base64String,
-          mimeType: imageFile.type
+          images: payloadImages // Sending the array!
         })
       });
 
@@ -71,15 +75,8 @@ export default function Home() {
 
       setResult(data);
 
-      // Save to history and local storage
-      const newReport = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleString(),
-        description,
-        ...data
-      };
-
-      const updatedHistory = [newReport, ...history].slice(0, 10); // Keep max 10 reports
+      const newReport = { id: Date.now(), timestamp: new Date().toLocaleString(), description, ...data };
+      const updatedHistory = [newReport, ...history].slice(0, 10);
       setHistory(updatedHistory);
       localStorage.setItem('damage_reports_history', JSON.stringify(updatedHistory));
 
@@ -94,59 +91,43 @@ export default function Home() {
   const handleDirectDownload = async () => {
     if (!result) return;
     setIsDownloading(true);
-
     try {
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF();
-
       doc.setFontSize(22);
       doc.setTextColor(30, 58, 138);
       doc.text('AI Damage Assessment Report', 20, 20);
-
       doc.setDrawColor(200, 200, 200);
       doc.line(20, 25, 190, 25);
-
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
-
       doc.setFont('helvetica', 'bold');
       doc.text('Damage Type:', 20, 40);
       doc.setFont('helvetica', 'normal');
       doc.text(result.damageType || 'N/A', 60, 40);
-
       doc.setFont('helvetica', 'bold');
       doc.text('Severity:', 20, 50);
       doc.setFont('helvetica', 'normal');
       doc.text(result.severity || 'N/A', 60, 50);
-
       doc.setFont('helvetica', 'bold');
       doc.text('Estimated Cost:', 20, 60);
       doc.setFont('helvetica', 'normal');
-      const cleanCost = (result.estimatedCostINR || '').replace(/₹/g, 'INR ');
-      doc.text(cleanCost, 60, 60);
-
+      doc.text((result.estimatedCostINR || '').replace(/₹/g, 'INR '), 60, 60);
       doc.setFont('helvetica', 'bold');
       doc.text('Executive Summary:', 20, 80);
       doc.setFont('helvetica', 'normal');
-
-      const splitSummary = doc.splitTextToSize(result.summary || '', 170);
-      doc.text(splitSummary, 20, 90);
-
+      doc.text(doc.splitTextToSize(result.summary || '', 170), 20, 90);
       doc.save('AI_Damage_Report.pdf');
-
     } catch (err: any) {
-      console.error('PDF Error:', err);
-      alert('PDF Error: ' + (err.message || 'Check browser console for details.'));
+      alert('PDF Error: ' + (err.message || 'Check console.'));
     } finally {
       setIsDownloading(false);
     }
   };
 
   const getSeverityStyles = (severity: string = '') => {
-    if (severity.includes('High') || severity.includes('Critical'))
-      return 'bg-red-100 text-red-800 border-red-200';
-    if (severity.includes('Medium'))
-      return 'bg-orange-100 text-orange-800 border-orange-200';
+    if (severity.includes('High') || severity.includes('Critical')) return 'bg-red-100 text-red-800 border-red-200';
+    if (severity.includes('Medium')) return 'bg-orange-100 text-orange-800 border-orange-200';
     return 'bg-green-100 text-green-800 border-green-200';
   };
 
@@ -159,6 +140,7 @@ export default function Home() {
 
       <main className="flex-grow container mx-auto px-4 py-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
           {/* Upload Section */}
           <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
@@ -170,38 +152,42 @@ export default function Home() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={4}
+              rows={3}
               className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none transition-all"
               placeholder="Describe the damage..."
             />
 
-            <label className="block text-sm font-medium text-gray-600 mb-2">Upload Photo</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-6 cursor-pointer transition-all"
-            />
+            <label className="block text-sm font-medium text-gray-600 mb-3">Upload Photos</label>
 
-            {imagePreview && (
-              <img src={imagePreview} alt="Preview" className="w-full h-56 object-cover rounded-xl border border-gray-200 mb-6 shadow-sm" />
-            )}
+            {/* MULTIPLE IMAGE UI GRID */}
+            <div className="flex flex-wrap gap-4 mb-6">
+              {images.map((img, index) => (
+                <div key={index} className="relative w-24 h-24 group animate-in zoom-in duration-200">
+                  <img src={img.preview} alt="upload" className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm" />
+                  <button
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-600 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+              {/* The Styled '+' Button */}
+              <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 text-blue-600 cursor-pointer hover:bg-blue-100 hover:border-blue-400 transition-all">
+                <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                <span className="text-xs font-medium">Add Photo</span>
+                <input type="file" accept="image/*" multiple onChange={handleAddImages} className="hidden" />
+              </label>
+            </div>
 
             <button
               onClick={handleCheckDamage}
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-70 flex justify-center items-center gap-2 shadow-sm"
+              disabled={loading || images.length === 0}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-sm"
             >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  Creating Report...
-                </>
-              ) : (
-                'Get Damage Report'
-              )}
+              {loading ? 'Analyzing...' : 'Get Damage Report'}
             </button>
-
             {error && <p className="text-red-500 mt-4 text-sm font-medium bg-red-50 p-3 rounded-lg border border-red-100">{error}</p>}
           </div>
 
@@ -211,58 +197,31 @@ export default function Home() {
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
               Assessment Report
             </h2>
-
-            {!loading && !result && (
-              <div className="flex flex-col items-center justify-center flex-grow text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <p>Waiting for photo and description...</p>
-              </div>
-            )}
-
-            {loading && (
-              <div className="flex flex-col items-center justify-center flex-grow text-blue-500 bg-blue-50/50 rounded-xl">
-                <p className="animate-pulse font-medium">Checking damage details...</p>
-              </div>
-            )}
+            {!loading && !result && <div className="flex-grow text-gray-400 bg-gray-50 flex items-center justify-center rounded-xl border border-dashed border-gray-200">Waiting for evidence...</div>}
+            {loading && <div className="flex-grow text-blue-500 bg-blue-50/50 flex items-center justify-center rounded-xl animate-pulse font-medium">Inspecting damage details...</div>}
 
             {result && (
               <div className="flex flex-col flex-grow space-y-5 animate-in fade-in duration-500">
                 <div className="p-5 bg-gray-50 rounded-xl border border-gray-100">
-                  <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Damage Type</p>
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Damage Type</p>
                   <p className="text-xl font-semibold text-gray-800">{result.damageType}</p>
                 </div>
-
                 <div className="grid grid-cols-2 gap-5">
                   <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-center">
-                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Severity</p>
-                    <div>
-                      <span className={`px-3 py-1 text-sm font-bold rounded-full border ${getSeverityStyles(result.severity)}`}>
-                        {result.severity}
-                      </span>
-                    </div>
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-2">Severity</p>
+                    <div><span className={`px-3 py-1 text-sm font-bold rounded-full border ${getSeverityStyles(result.severity)}`}>{result.severity}</span></div>
                   </div>
-
                   <div className="p-5 bg-blue-50 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-center">
-                    <p className="text-xs text-blue-500 uppercase tracking-widest font-bold mb-1">Est. Cost</p>
+                    <p className="text-xs text-blue-500 uppercase font-bold mb-1">Est. Cost</p>
                     <p className="text-2xl font-bold text-blue-700">{result.estimatedCostINR}</p>
                   </div>
                 </div>
-
                 <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex-grow">
-                  <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3">Executive Summary</p>
-                  <p className="text-gray-700 leading-relaxed text-sm">{result.summary}</p>
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-3">Executive Summary</p>
+                  <p className="text-gray-700 text-sm leading-relaxed">{result.summary}</p>
                 </div>
-
-                <button
-                  onClick={handleDirectDownload}
-                  disabled={isDownloading}
-                  className="mt-6 w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 flex justify-center items-center gap-2 shadow-sm disabled:opacity-70"
-                >
-                  {isDownloading ? 'Generating PDF...' : (
-                    <>
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                      Save as PDF
-                    </>
-                  )}
+                <button onClick={handleDirectDownload} disabled={isDownloading} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-70 flex justify-center items-center gap-2">
+                  {isDownloading ? 'Generating PDF...' : 'Save as PDF'}
                 </button>
               </div>
             )}
@@ -275,19 +234,18 @@ export default function Home() {
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             Report History
           </h2>
-
           {history.length === 0 ? (
-            <p className="text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">No previous reports found. Generate a report to see it here.</p>
+            <p className="text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">No previous reports found.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date & Time</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Damage Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Severity</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cost (INR)</th>
-                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Date & Time</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Damage Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Severity</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Cost (INR)</th>
+                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -295,24 +253,10 @@ export default function Home() {
                     <tr key={report.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.timestamp}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{report.damageType}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`px-2 py-1 inline-flex text-xs font-bold leading-5 rounded-full border ${report.severity.includes('High') || report.severity.includes('Critical')
-                          ? 'bg-red-100 text-red-800 border-red-200'
-                          : report.severity.includes('Medium')
-                            ? 'bg-orange-100 text-orange-800 border-orange-200'
-                            : 'bg-green-100 text-green-800 border-green-200'
-                          }`}>
-                          {report.severity}
-                        </span>
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm"><span className={`px-2 py-1 text-xs font-bold rounded-full border ${getSeverityStyles(report.severity)}`}>{report.severity}</span></td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.estimatedCostINR}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => setResult(report)}
-                          className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-all"
-                        >
-                          View Report
-                        </button>
+                        <button onClick={() => setResult(report)} className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-all">View Report</button>
                       </td>
                     </tr>
                   ))}
