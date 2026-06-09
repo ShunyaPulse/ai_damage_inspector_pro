@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
   const [description, setDescription] = useState('');
@@ -10,6 +10,19 @@ export default function Home() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+
+  // Load history from localStorage on component mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('damage_reports_history');
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error('Failed to parse history:', e);
+      }
+    }
+  }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,30 +45,47 @@ export default function Home() {
     setResult(null);
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(imageFile);
-      reader.onload = async () => {
-        const base64String = (reader.result as string).split(',')[1];
+      const base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(imageFile);
+        reader.onload = () => {
+          const resultStr = reader.result as string;
+          resolve(resultStr.split(',')[1]);
+        };
+        reader.onerror = () => reject(new Error('Failed to read the image file.'));
+      });
 
-        const res = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            description,
-            base64Image: base64String,
-            mimeType: imageFile.type
-          })
-        });
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description,
+          base64Image: base64String,
+          mimeType: imageFile.type
+        })
+      });
 
-        const data = await res.json();
+      const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || 'Failed to check damage');
+      if (!res.ok) throw new Error(data.error || 'Failed to check damage');
 
-        setResult(data);
-        setLoading(false);
+      setResult(data);
+
+      // Save to history and local storage
+      const newReport = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString(),
+        description,
+        ...data
       };
+
+      const updatedHistory = [newReport, ...history].slice(0, 10); // Keep max 10 reports
+      setHistory(updatedHistory);
+      localStorage.setItem('damage_reports_history', JSON.stringify(updatedHistory));
+
     } catch (err: any) {
       setError(err.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -66,59 +96,53 @@ export default function Home() {
     setIsDownloading(true);
 
     try {
-      // Dynamically import to keep the app fast
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF();
 
-      // Header
       doc.setFontSize(22);
-      doc.setTextColor(30, 58, 138); // Professional Dark Blue
+      doc.setTextColor(30, 58, 138);
       doc.text('AI Damage Assessment Report', 20, 20);
 
-      // Divider Line
       doc.setDrawColor(200, 200, 200);
       doc.line(20, 25, 190, 25);
 
-      // Data Fields
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
 
       doc.setFont('helvetica', 'bold');
       doc.text('Damage Type:', 20, 40);
       doc.setFont('helvetica', 'normal');
-      doc.text(result.damageType, 60, 40);
+      doc.text(result.damageType || 'N/A', 60, 40);
 
       doc.setFont('helvetica', 'bold');
       doc.text('Severity:', 20, 50);
       doc.setFont('helvetica', 'normal');
-      doc.text(result.severity, 60, 50);
+      doc.text(result.severity || 'N/A', 60, 50);
 
       doc.setFont('helvetica', 'bold');
       doc.text('Estimated Cost:', 20, 60);
       doc.setFont('helvetica', 'normal');
-      const cleanCost = result.estimatedCostINR.replace(/₹/g, 'INR ');
+      const cleanCost = (result.estimatedCostINR || '').replace(/₹/g, 'INR ');
       doc.text(cleanCost, 60, 60);
 
       doc.setFont('helvetica', 'bold');
       doc.text('Executive Summary:', 20, 80);
       doc.setFont('helvetica', 'normal');
 
-      // Auto-wrap long text so it doesn't run off the page
-      const splitSummary = doc.splitTextToSize(result.summary, 170);
+      const splitSummary = doc.splitTextToSize(result.summary || '', 170);
       doc.text(splitSummary, 20, 90);
 
-      // Direct, silent download!
       doc.save('AI_Damage_Report.pdf');
 
-    } catch (err) {
-      console.error("PDF Error:", err);
-      alert("Failed to generate PDF document.");
+    } catch (err: any) {
+      console.error('PDF Error:', err);
+      alert('PDF Error: ' + (err.message || 'Check browser console for details.'));
     } finally {
       setIsDownloading(false);
     }
   };
 
-  const getSeverityStyles = (severity: string) => {
+  const getSeverityStyles = (severity: string = '') => {
     if (severity.includes('High') || severity.includes('Critical'))
       return 'bg-red-100 text-red-800 border-red-200';
     if (severity.includes('Medium'))
@@ -133,112 +157,167 @@ export default function Home() {
         <h1 className="text-xl font-bold tracking-wide">AI Damage Inspector Pro</h1>
       </nav>
 
-      <main className="flex-grow container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+      <main className="flex-grow container mx-auto px-4 py-8 space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Upload Section */}
+          <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+            <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              1. Upload Evidence
+            </h2>
 
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-          <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            1. Upload Evidence
-          </h2>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Accident Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none transition-all"
+              placeholder="Describe the damage..."
+            />
 
-          <label className="block text-sm font-medium text-gray-600 mb-2">Accident Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none transition-all"
-            placeholder="Describe the damage..."
-          />
+            <label className="block text-sm font-medium text-gray-600 mb-2">Upload Photo</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-6 cursor-pointer transition-all"
+            />
 
-          <label className="block text-sm font-medium text-gray-600 mb-2">Upload Photo</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageChange}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-6 cursor-pointer transition-all"
-          />
-
-          {imagePreview && (
-            <img src={imagePreview} alt="Preview" className="w-full h-56 object-cover rounded-xl border border-gray-200 mb-6 shadow-sm" />
-          )}
-
-          <button
-            onClick={handleCheckDamage}
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-70 flex justify-center items-center gap-2 shadow-sm"
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Creating Report...
-              </>
-            ) : (
-              'Get Damage Report'
+            {imagePreview && (
+              <img src={imagePreview} alt="Preview" className="w-full h-56 object-cover rounded-xl border border-gray-200 mb-6 shadow-sm" />
             )}
-          </button>
 
-          {error && <p className="text-red-500 mt-4 text-sm font-medium bg-red-50 p-3 rounded-lg border border-red-100">{error}</p>}
-        </div>
+            <button
+              onClick={handleCheckDamage}
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 disabled:opacity-70 flex justify-center items-center gap-2 shadow-sm"
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  Creating Report...
+                </>
+              ) : (
+                'Get Damage Report'
+              )}
+            </button>
 
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex flex-col">
-          <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-            Assessment Report
-          </h2>
+            {error && <p className="text-red-500 mt-4 text-sm font-medium bg-red-50 p-3 rounded-lg border border-red-100">{error}</p>}
+          </div>
 
-          {!loading && !result && (
-            <div className="flex flex-col items-center justify-center flex-grow text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-              <p>Waiting for photo and description...</p>
-            </div>
-          )}
+          {/* Assessment Report */}
+          <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex flex-col">
+            <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              Assessment Report
+            </h2>
 
-          {loading && (
-            <div className="flex flex-col items-center justify-center flex-grow text-blue-500 bg-blue-50/50 rounded-xl">
-              <p className="animate-pulse font-medium">Checking damage details...</p>
-            </div>
-          )}
-
-          {result && (
-            <div className="flex flex-col flex-grow space-y-5 animate-in fade-in duration-500">
-
-              <div className="p-5 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Damage Type</p>
-                <p className="text-xl font-semibold text-gray-800">{result.damageType}</p>
+            {!loading && !result && (
+              <div className="flex flex-col items-center justify-center flex-grow text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <p>Waiting for photo and description...</p>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-5">
-                <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-center">
-                  <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Severity</p>
-                  <div>
-                    <span className={`px-3 py-1 text-sm font-bold rounded-full border ${getSeverityStyles(result.severity)}`}>
-                      {result.severity}
-                    </span>
+            {loading && (
+              <div className="flex flex-col items-center justify-center flex-grow text-blue-500 bg-blue-50/50 rounded-xl">
+                <p className="animate-pulse font-medium">Checking damage details...</p>
+              </div>
+            )}
+
+            {result && (
+              <div className="flex flex-col flex-grow space-y-5 animate-in fade-in duration-500">
+                <div className="p-5 bg-gray-50 rounded-xl border border-gray-100">
+                  <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Damage Type</p>
+                  <p className="text-xl font-semibold text-gray-800">{result.damageType}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Severity</p>
+                    <div>
+                      <span className={`px-3 py-1 text-sm font-bold rounded-full border ${getSeverityStyles(result.severity)}`}>
+                        {result.severity}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-blue-50 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-center">
+                    <p className="text-xs text-blue-500 uppercase tracking-widest font-bold mb-1">Est. Cost</p>
+                    <p className="text-2xl font-bold text-blue-700">{result.estimatedCostINR}</p>
                   </div>
                 </div>
 
-                <div className="p-5 bg-blue-50 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-center">
-                  <p className="text-xs text-blue-500 uppercase tracking-widest font-bold mb-1">Est. Cost</p>
-                  <p className="text-2xl font-bold text-blue-700">{result.estimatedCostINR}</p>
+                <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex-grow">
+                  <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3">Executive Summary</p>
+                  <p className="text-gray-700 leading-relaxed text-sm">{result.summary}</p>
                 </div>
-              </div>
 
-              <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex-grow">
-                <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3">Executive Summary</p>
-                <p className="text-gray-700 leading-relaxed text-sm">{result.summary}</p>
+                <button
+                  onClick={handleDirectDownload}
+                  disabled={isDownloading}
+                  className="mt-6 w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 flex justify-center items-center gap-2 shadow-sm disabled:opacity-70"
+                >
+                  {isDownloading ? 'Generating PDF...' : (
+                    <>
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                      Save as PDF
+                    </>
+                  )}
+                </button>
               </div>
+            )}
+          </div>
+        </div>
 
-              <button
-                onClick={handleDirectDownload}
-                disabled={isDownloading}
-                className="mt-6 w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl transition duration-200 flex justify-center items-center gap-2 shadow-sm disabled:opacity-70"
-              >
-                {isDownloading ? 'Generating PDF...' : (
-                  <>
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    Save as PDF
-                  </>
-                )}
-              </button>
+        {/* Report History Section */}
+        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Report History
+          </h2>
+
+          {history.length === 0 ? (
+            <p className="text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">No previous reports found. Generate a report to see it here.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date & Time</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Damage Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Severity</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cost (INR)</th>
+                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {history.map((report) => (
+                    <tr key={report.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.timestamp}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{report.damageType}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-1 inline-flex text-xs font-bold leading-5 rounded-full border ${report.severity.includes('High') || report.severity.includes('Critical')
+                          ? 'bg-red-100 text-red-800 border-red-200'
+                          : report.severity.includes('Medium')
+                            ? 'bg-orange-100 text-orange-800 border-orange-200'
+                            : 'bg-green-100 text-green-800 border-green-200'
+                          }`}>
+                          {report.severity}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.estimatedCostINR}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => setResult(report)}
+                          className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                          View Report
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
