@@ -17,6 +17,17 @@ export async function POST(req: Request) {
         const promptText = `
       You are an expert Insurance Adjuster and Property Damage Assessor in India. 
       Analyze the user's description and all uploaded photos.
+      
+      CRITICAL INSTRUCTIONS FOR COST ESTIMATION (INDIA SPECIFIC):
+      - VEHICLES: Assume standard mass-market Indian cars (e.g., Maruti, Hyundai, Tata) unless a luxury badge is explicitly visible.
+        * Standard body panel parts (doors, bumpers, fenders) usually cost between ₹3,000 to ₹10,000.
+        * Local garage denting/painting labor per panel is typically ₹2,500 to ₹6,000.
+        * Total replacement and painting of a single standard door should rarely exceed ₹15,000 to ₹25,000.
+      - PROPERTY: Assume standard Indian residential construction (Brickwork, RCC, cement plaster, standard tiles/roofing).
+        * Use local Indian material costs and standard daily wage labor rates (e.g., masonry work, basic plumbing).
+        * Do NOT quote Western construction costs (like drywall or timber framing) or high-end architectural materials unless explicitly visible.
+        * Minor wall/plaster repairs usually range from ₹2,000 to ₹10,000. Major structural/roof damage can range from ₹20,000 to ₹1,00,000+ depending on square footage.
+
       Output ONLY a valid JSON object with the following keys, and nothing else. Do not use markdown tags like \`\`\`json.
       {
           "damageType": "Short 3-5 word description",
