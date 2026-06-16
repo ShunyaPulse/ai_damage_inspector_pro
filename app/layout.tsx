@@ -30,6 +30,21 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">{children}
 
+        {/* Global Footer added here */}
+        <footer className="bg-white border-t border-gray-200 mt-auto">
+          <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <nav className="flex flex-wrap justify-center space-x-6 mb-4">
+              <a href="/about-us" className="text-sm text-gray-500 hover:text-gray-900">About Us</a>
+              <a href="/privacy-policy" className="text-sm text-gray-500 hover:text-gray-900">Privacy Policy</a>
+              <a href="/terms-of-service" className="text-sm text-gray-500 hover:text-gray-900">Terms of Service</a>
+              <a href="/contact" className="text-sm text-gray-500 hover:text-gray-900">Contact</a>
+            </nav>
+            <p className="text-center text-xs text-gray-400">
+              &copy; {new Date().getFullYear()} AI Damage Inspector Pro. All rights reserved.
+            </p>
+          </div>
+        </footer>
+
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2537057702197590"
           crossOrigin="anonymous"></script>
 

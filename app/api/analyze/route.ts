@@ -14,6 +14,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "API keys are not configured." }, { status: 500 });
         }
 
+        // 1. Build the dynamic conditional string
+        const descriptionContext = description && description.trim() !== ""
+          ? `USER ACCIDENT DESCRIPTION: "${description}". 
+             CRITICAL INSTRUCTION: Use this description to deduce potential hidden structural or material damage (e.g., if plastic was hit hard, quote a replacement part, not just paint labor).`
+          : `USER ACCIDENT DESCRIPTION: None provided. 
+             CRITICAL INSTRUCTION: Base your pricing estimation strictly and exclusively on the visible surface damage in the provided images. Do not invent a backstory.`;
+
         const promptText = `
       You are an expert Insurance Adjuster and Property Damage Assessor in India. 
       Analyze the user's description and all uploaded photos.
@@ -28,6 +35,8 @@ export async function POST(req: Request) {
         * Do NOT quote Western construction costs (like drywall or timber framing) or high-end architectural materials unless explicitly visible.
         * Minor wall/plaster repairs usually range from ₹2,000 to ₹10,000. Major structural/roof damage can range from ₹20,000 to ₹1,00,000+ depending on square footage.
 
+      ${descriptionContext}
+
       Output ONLY a valid JSON object with the following keys, and nothing else. Do not use markdown tags like \`\`\`json.
       {
           "damageType": "Short 3-5 word description",
@@ -40,8 +49,8 @@ export async function POST(req: Request) {
           ],
           "summary": "A 3-sentence professional summary of the overall damage and recommended action."
       }
-      User Description: ${description}
     `;
+        
         // 2. Map through the frontend images to create Gemini's inlineData parts
         // (Using inlineData and mimeType as the strict standard)
         const imageParts = images.map((img: any) => ({

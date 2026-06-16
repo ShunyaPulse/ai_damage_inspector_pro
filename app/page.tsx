@@ -155,8 +155,25 @@ export default function Home() {
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
               1. Upload Evidence
             </h2>
-            <label className="block text-sm font-medium text-gray-600 mb-2">Accident Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 mb-6 bg-gray-50 outline-none transition-all" placeholder="Describe the damage..." />
+           <div className="flex flex-col space-y-2 mb-6">
+  <label htmlFor="description" className="text-sm font-semibold text-gray-800 flex items-center">
+    Accident Description 
+    <span className="ml-2 text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full uppercase tracking-wide">
+      Highly Recommended
+    </span>
+  </label>
+  <p className="text-xs text-gray-500">
+    Telling us how it happened (e.g., speed, what you hit) helps the AI detect hidden structural damage that photos can't show.
+  </p>
+  <textarea 
+    id="description"
+    value={description} 
+    onChange={(e) => setDescription(e.target.value)} 
+    rows={3} 
+    className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50 outline-none transition-all" 
+    placeholder='Optional: e.g., "I backed into a concrete pillar at 10km/h..."' 
+  />
+</div>
             <label className="block text-sm font-medium text-gray-600 mb-3">Upload Photos</label>
 
             <div className="flex flex-wrap gap-4 mb-6">
