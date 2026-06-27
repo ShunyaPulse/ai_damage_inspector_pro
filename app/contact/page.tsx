@@ -7,7 +7,7 @@ export default function Contact() {
         <h1 className="text-3xl font-bold text-gray-900">Contact Us</h1>
         
         <p className="text-gray-600 leading-relaxed">
-          We would love to hear from you! Whether you have a question about how our AI calculates local repair costs, found a bug in the PDF generator, or have suggestions to make the app better for Indian car owners, please reach out.
+          We would love to hear from you! Whether you have a question about how our AI calculates local repair costs, found a bug in the PDF generator, or have suggestions to make the app better for Indian car and property owners, please reach out.
         </p>
 
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 mt-6">

@@ -147,7 +147,7 @@ export default function Home() {
         <h1 className="text-xl font-bold tracking-wide">AI Damage Inspector Pro</h1>
       </nav>
 
-      <main className="flex-grow container mx-auto px-4 py-8 space-y-8">
+      <main className="growainer mx-auto px-4 py-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
           <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
@@ -201,11 +201,11 @@ export default function Home() {
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
               Assessment Report
             </h2>
-            {!loading && !result && <div className="flex-grow text-gray-400 bg-gray-50 flex items-center justify-center rounded-xl border border-dashed border-gray-200">Waiting for evidence...</div>}
-            {loading && <div className="flex-grow text-blue-500 bg-blue-50/50 flex items-center justify-center rounded-xl animate-pulse font-medium">Inspecting damage details...</div>}
+            {!loading && !result && <div className="grow text-gray-400 bg-gray-50 flex items-center justify-center rounded-xl border border-dashed border-gray-200">Waiting for evidence...</div>}
+            {loading && <div className="grow text-blue-500 bg-blue-50/50 flex items-center justify-center rounded-xl animate-pulse font-medium">Inspecting damage details...</div>}
 
             {result && (
-              <div className="flex flex-col flex-grow space-y-4 animate-in fade-in duration-500">
+              <div className="flex flex-col grow space-y-4 animate-in fade-in duration-500">
                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <p className="text-xs text-gray-500 uppercase font-bold mb-1">Damage Type</p>
                   <p className="text-lg font-semibold text-gray-800">{result.damageType}</p>
@@ -237,7 +237,7 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex-grow">
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 grow">
                   <p className="text-xs text-gray-500 uppercase font-bold mb-2">Executive Summary</p>
                   <p className="text-gray-700 text-sm leading-relaxed">{result.summary}</p>
                 </div>
@@ -286,6 +286,34 @@ export default function Home() {
             </div>
           )}
         </div>
+        {/* Paste this clean text block right below your main analysis grid container */}
+<section className="bg-white rounded-2xl shadow-sm p-8 border border-gray-100 max-w-7xl mx-auto mt-8 space-y-6">
+  <h2 className="text-2xl font-bold text-gray-900">How AI Accurately Estimates Local Repair Costs in India</h2>
+  <p className="text-gray-600 leading-relaxed">
+    Our advanced AI damage inspection tool cross-references visual image telemetry with localized automotive and construction cost baselines specific to the Indian market. By examining panel depth, surface scratches, and structural distortion, the engine models calculations derived from standard tier-1 city garage labor charts.
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+    <div className="p-4 bg-gray-50 rounded-xl">
+      <h3 className="font-semibold text-gray-800 mb-2">Automotive Standards</h3>
+      <p className="text-xs text-gray-500">
+        Calibrated against domestic components for mass-market vehicle providers including Maruti Suzuki, Hyundai, Tata, and Mahindra.
+      </p>
+    </div>
+    <div className="p-4 bg-gray-50 rounded-xl">
+      <h3 className="font-semibold text-gray-800 mb-2">Material Calculation</h3>
+      <p className="text-xs text-gray-500">
+        Factors in current commercial brickwork, plastering, structural RCC framing, and masonry daily wages across standard domestic properties.
+      </p>
+    </div>
+    <div className="p-4 bg-gray-50 rounded-xl">
+      <h3 className="font-semibold text-gray-800 mb-2">GST Alignment</h3>
+      <p className="text-xs text-gray-500">
+        Applies current statutory luxury tax and regular service tax configurations directly into the itemized output calculation breakdowns.
+      </p>
+    </div>
+  </div>
+</section>
       </main>
     </div>
   );
