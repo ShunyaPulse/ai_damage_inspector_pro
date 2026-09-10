@@ -9,7 +9,7 @@ An AI-assisted visual damage inspection and cost-estimation platform built with 
 
 ---
 
-## âœ¨ Features
+## ✨ Features
 
 - **Multi-Angle Visual Uploads**: Drag-and-drop or select multiple photos of damaged items (vehicles, property, hardware).
 - **Automated Damage Assessment**: Analyzes visual inputs, assigns severity ratings, and provides damage classifications.
@@ -20,7 +20,7 @@ An AI-assisted visual damage inspection and cost-estimation platform built with 
 
 ---
 
-## ðŸ› ï¸ Tech Stack
+## 🛠️ Tech Stack
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
@@ -30,7 +30,7 @@ An AI-assisted visual damage inspection and cost-estimation platform built with 
 
 ---
 
-## ðŸš€ Getting Started
+## 🚀 Getting Started
 
 ### 1. Clone & Install
 ```bash
