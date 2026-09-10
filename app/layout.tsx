@@ -45,8 +45,10 @@ export default function RootLayout({
           </div>
         </footer>
 
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2537057702197590"
-          crossOrigin="anonymous"></script>
+        
+        {/* Adsterra Ads */}
+        <script src="//pl31276672.profitableratecpmnetwork.com/ef/ad/b7/efadb7e2184f7cc188b19268c6e4846c.js"></script>
+        <script src="//pl31276673.profitableratecpmnetwork.com/f8/9a/5a/f89a5aca2d1fce881a896a8656d64625.js"></script>
 
       </body>
     </html>
